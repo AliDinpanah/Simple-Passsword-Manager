@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Password Manager</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Master Password Section -->
+  <div id="verify-password">
+    <h2>Verify Identity</h2>
+    <input type="password" id="master-password" placeholder="Enter Master Password">
+    <button id="verify-button">Verify</button>
+  </div>
+
+  <!-- Main Password Manager Interface -->
+  <div id="content">
+    <h1>Password Manager</h1>
+
+    <!-- Add Password Section -->
+    <div id="add-password">
+      <h2>Add Password</h2>
+      <input type="text" id="site-name" placeholder="Site Name">
+      <input type="text" id="username" placeholder="Username">
+      <input type="password" id="password" placeholder="Password">
+      <button id="save-password">Save</button>
+    </div>
+
+    <!-- Search Password Section -->
+    <div id="search-password">
+      <h2>Search Password</h2>
+      <input type="text" id="search-query" placeholder="Search by Site or Username">
+      <button id="search-button">Search</button>
+    </div>
+
+    <!-- Display Passwords Section -->
+    <div id="password-list">
+      <h2>Stored Passwords</h2>
+    </div>
+
+    <!-- Generate Password Section -->
+    <div id="generate-password">
+      <h2>Generate Strong Password</h2>
+      <input type="number" id="password-length" placeholder="Length (e.g., 12)" min="8" max="32" value="12">
+      <div class="checkbox-group">
+        <label>
+          <input type="checkbox" id="include-uppercase" checked> Include Uppercase (A-Z)
+        </label>
+        <label>
+          <input type="checkbox" id="include-lowercase" checked> Include Lowercase (a-z)
+        </label>
+        <label>
+          <input type="checkbox" id="include-numbers" checked> Include Numbers (0-9)
+        </label>
+        <label>
+          <input type="checkbox" id="include-symbols" checked> Include Symbols (!@#$%^&*)
+        </label>
+      </div>
+      <button id="generate-button">Generate Password</button>
+      <input type="text" id="generated-password" readonly>
+      <button id="use-password">Use This Password</button>
+    </div>
+  </div>
+
+  <!-- Custom Modal for Alerts -->
+  <div id="custom-modal" class="modal">
+    <div class="modal-content">
+      <p id="modal-message"></p>
+      <button id="modal-close">OK</button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="popup.js"></script>
+</body>
+</html>
