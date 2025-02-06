@@ -2,44 +2,43 @@
 const serverUrl = 'http://localhost:3000';
 
 // Generate and persist the encryption key
+// Generate and persist the encryption key
 let encryptionKey;
 
-// Default master password
 const DEFAULT_MASTER_PASSWORD = 'master';
 
 async function generateKey() {
   return new Promise(async (resolve, reject) => {
-    // Check if the key already exists in storage
-    chrome.storage.local.get(['encryptionKey'], async (result) => {
-      if (result.encryptionKey) {
-        // Import the existing key
-        const keyData = Uint8Array.from(result.encryptionKey);
-        encryptionKey = await crypto.subtle.importKey(
-          'raw',
-          keyData,
-          { name: 'AES-GCM', length: 256 },
-          true,
-          ['encrypt', 'decrypt']
-        );
-        console.log('Encryption key loaded from storage.');
-        resolve();
-      } else {
-        // Generate a new key and save it to storage
-        encryptionKey = await crypto.subtle.generateKey(
-          { name: 'AES-GCM', length: 256 },
-          true, // Whether the key is extractable
-          ['encrypt', 'decrypt'] // Key usages
-        );
-        const exportedKey = await crypto.subtle.exportKey('raw', encryptionKey);
-        const keyArray = Array.from(new Uint8Array(exportedKey));
-        chrome.storage.local.set({ encryptionKey: keyArray }, () => {
-          console.log('Encryption key generated and saved to storage.');
-          resolve();
-        });
-      }
-    });
+    // Check if the key already exists in localStorage
+    const storedKey = localStorage.getItem('encryptionKey');
+    if (storedKey) {
+      // Import the existing key
+      const keyData = Uint8Array.from(JSON.parse(storedKey));
+      encryptionKey = await crypto.subtle.importKey(
+        'raw',
+        keyData,
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      console.log('Encryption key loaded from localStorage.');
+      resolve();
+    } else {
+      // Generate a new key and save it to localStorage
+      encryptionKey = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true, // Whether the key is extractable
+        ['encrypt', 'decrypt'] // Key usages
+      );
+      const exportedKey = await crypto.subtle.exportKey('raw', encryptionKey);
+      const keyArray = Array.from(new Uint8Array(exportedKey));
+      localStorage.setItem('encryptionKey', JSON.stringify(keyArray));
+      console.log('Encryption key generated and saved to localStorage.');
+      resolve();
+    }
   });
 }
+
 
 // Encrypt the password
 async function encryptPassword(password) {
@@ -118,16 +117,14 @@ async function savePassword() {
   }
 }
 
-// Add these functions to your popup.js
-
 // Function to fetch all passwords
 async function getAllPasswords() {
   try {
-    const response = await fetch('http://localhost:3000/api/passwords');
+    const response = await fetch(`${serverUrl}/api/get-passwords`);
     const data = await response.json();
     
-    if (data.success) {
-      await displayPasswords(data.data);
+    if (data) {
+      await displayPasswords(data);
     } else {
       showModal('Failed to fetch passwords');
     }
@@ -144,17 +141,21 @@ async function searchPasswords() {
   try {
     let response;
     if (searchQuery) {
-      response = await fetch(`http://localhost:3000/api/passwords/search/${encodeURIComponent(searchQuery)}`);
+      response = await fetch(`${serverUrl}/api/passwords/search/${encodeURIComponent(searchQuery)}`);
     } else {
-      response = await fetch('http://localhost:3000/api/passwords');
+      response = await fetch(`${serverUrl}/api/get-passwords`);
     }
     
+    if (!response.ok) {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
+
     const data = await response.json();
     
-    if (data.success) {
-      await displayPasswords(data.data);
+    if (data) {
+      await displayPasswords(data);
     } else {
-      showModal('Failed to search passwords');
+      showModal('No passwords found');
     }
   } catch (error) {
     showModal('Error connecting to server');
@@ -162,7 +163,7 @@ async function searchPasswords() {
   }
 }
 
-// Updated display passwords function
+// Updated displayPasswords function that decrypts the password before displaying it
 async function displayPasswords(passwords) {
   const passwordList = document.getElementById('password-list');
   passwordList.innerHTML = '<h2>Stored Passwords</h2>';
@@ -174,7 +175,11 @@ async function displayPasswords(passwords) {
     return;
   }
 
-  passwords.forEach(entry => {
+  // Use a for…of loop to await decryption for each entry
+  for (const entry of passwords) {
+    // Decrypt the password before displaying it
+    const decryptedPassword = await decryptPassword(entry.password);
+
     const div = document.createElement('div');
     div.innerHTML = `
       <div class="password-entry">
@@ -182,7 +187,7 @@ async function displayPasswords(passwords) {
         <p><strong>Username:</strong> ${entry.username}</p>
         <p><strong>Password:</strong> 
           <span class="password-hidden">********</span>
-          <span class="password-visible" style="display:none">${entry.password}</span>
+          <span class="password-visible" style="display:none">${decryptedPassword}</span>
         </p>
         <button class="toggle-password">Show Password</button>
         <button class="fill-form">Fill Form</button>
@@ -210,7 +215,7 @@ async function displayPasswords(passwords) {
     });
 
     fillFormBtn.addEventListener('click', () => {
-      fillFormOnCurrentTab(entry.username, entry.password);
+      fillFormOnCurrentTab(entry.username, decryptedPassword);
     });
 
     deleteBtn.addEventListener('click', () => {
@@ -218,19 +223,9 @@ async function displayPasswords(passwords) {
     });
 
     passwordList.appendChild(div);
-  });
+  }
 }
 
-// Update the event listeners in your existing code
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('search-button').addEventListener('click', searchPasswords);
-  
-  // Initial load of passwords
-  const masterPasswordVerified = document.getElementById('verify-password').style.display === 'none';
-  if (masterPasswordVerified) {
-    getAllPasswords();
-  }
-});
 // Delete password from the server
 async function deletePassword(id) {
   try {
@@ -256,7 +251,6 @@ function generatePassword() {
   const includeLowercase = document.getElementById('include-lowercase').checked;
   const includeNumbers = document.getElementById('include-numbers').checked;
   const includeSymbols = document.getElementById('include-symbols').checked;
-
   const uppercaseChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const lowercaseChars = 'abcdefghijklmnopqrstuvwxyz';
   const numberChars = '0123456789';
@@ -344,6 +338,7 @@ function verifyMasterPassword() {
     if (inputPassword === storedPassword) {
       document.getElementById('content').style.display = 'block';
       document.getElementById('verify-password').style.display = 'none';
+      getAllPasswords(); // Load passwords after verification
     } else {
       showModal('Incorrect master password.');
     }
@@ -363,7 +358,6 @@ generateKey().then(() => {
   console.error('Initialization failed:', error);
 });
 
-
 // Add a new function to fill the form on the current tab
 function fillFormOnCurrentTab(username, password) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -380,38 +374,6 @@ function fillFormOnCurrentTab(username, password) {
       }
     );
   });
-}
-
-// Modify the displayPasswords function to add a "Fill Form" button
-async function displayPasswords(passwords) {
-  const passwordList = document.getElementById('password-list');
-  passwordList.innerHTML = '<h2>Stored Passwords</h2>';
-  for (let i = 0; i < passwords.length; i++) {
-    const entry = passwords[i];
-    const div = document.createElement('div');
-    const decryptedPassword = await decryptPassword(entry.password);
-    if (decryptedPassword) {
-      div.textContent = `Site: ${entry.siteName}, Username: ${entry.username}, Password: ${decryptedPassword}`;
-
-      // Add a "Fill Form" button
-      const fillFormButton = document.createElement('button');
-      fillFormButton.textContent = 'Fill Form';
-      fillFormButton.addEventListener('click', () =>
-        fillFormOnCurrentTab(entry.username, decryptedPassword)
-      );
-      div.appendChild(fillFormButton);
-
-      // Add a delete button
-      const deleteButton = document.createElement('button');
-      deleteButton.textContent = 'Delete';
-      deleteButton.addEventListener('click', () => deletePassword(entry.id));
-      div.appendChild(deleteButton);
-
-      passwordList.appendChild(div);
-    } else {
-      console.error('Failed to decrypt password for:', entry.siteName);
-    }
-  }
 }
 
 // Custom Modal Functions
