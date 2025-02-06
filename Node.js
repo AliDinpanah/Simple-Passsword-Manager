@@ -25,6 +25,16 @@ app.get('/api/get-passwords', (req, res) => {
   res.status(200).json(passwords);
 });
 
+// Search passwords endpoint (GET request)
+app.get('/api/passwords/search/:query', (req, res) => {
+  const query = req.params.query.toLowerCase();
+  const filteredPasswords = passwords.filter(entry => 
+    entry.siteName.toLowerCase().includes(query) || 
+    entry.username.toLowerCase().includes(query)
+  );
+  res.status(200).json(filteredPasswords);
+});
+
 // Delete password endpoint (DELETE request)
 app.delete('/api/delete-password/:id', (req, res) => {
   const id = req.params.id;
